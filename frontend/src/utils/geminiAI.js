@@ -38,7 +38,7 @@ async function fileToGenerativePart(file) {
  */
 export async function analyzeKYC(idCardFile) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         if (!idCardFile) throw new Error("No file provided");
 
@@ -46,14 +46,19 @@ export async function analyzeKYC(idCardFile) {
 
         const prompt = `
       Act as a Senior Forensic Document Examiner and AI Identity Expert.
-      Analyze the provided image of an official Government ID (like Aadhaar, PAN, Passport, or Driving License).
+      Analyze the provided image of an Government ID.
 
-      Task 1: FORENSIC INTEGRITY ANALYSIS (Crucial)
-      - Check for digital manipulation (Photoshop edits, mismatched fonts, pixelation around text).
-      - Check for physical validity (Are there natural shadows? Hologram reflections? Micro-print visibility?).
-      - Detect if this is a "screen capture" of a digital file vs a photo of a real physical card.
-      - Assign a "tamperScore" from 0 to 100 (0 = Obvious Fake, 100 = 100% Authentic Physical Card).
-      - Assign a "trustScore" (same as tamperScore, but labeled for UI).
+      Task 1: FORENSIC INTEGRITY ANALYSIS
+      Determine if this is a "Physical Scan" (photo of a real card) or a "Digital Original" (PDF/Screenshot of e-Aadhaar/e-PAN).
+
+      CRITICAL SCORING RULES:
+      1. If it looks like a **Physical Card**: Look for shadows, holograms, and micro-print. If these are missing or looks like a bad photoshop, score LOW.
+      2. If it looks like a **Digital Original (e-ID)**: It WON'T have shadows/holograms. This is VALID. Check for font consistency, alignment, and pixelation artifacts instead.
+      
+      Score 0-100 based on *integrity*:
+      - 90-100: Authentic (Clear Physical Card OR Perfect Digital Original).
+      - 70-89: Mostly valid, minor quality issues.
+      - 0-60: Obvious forgery, bad photoshop, or clearly manipulated text.
 
       Task 2: DATA EXTRACTION
       - Extract the visible text accurately.
@@ -62,9 +67,8 @@ export async function analyzeKYC(idCardFile) {
       {
         "forensics": {
           "trustScore": 95, 
-          "isPhysicalDocument": true,
-          "hasReplayAttackRisk": false,
-          "reasoning": "Detected natural lighting and hologram reflection. No pixel misalignment found."
+          "isPhysicalDocument": true, 
+          "reasoning": "Identified as a valid Digital Original (e-Aadhaar). Fonts and layout are consistent."
         },
         "extracted": {
           "fullName": "...",
@@ -77,7 +81,7 @@ export async function analyzeKYC(idCardFile) {
       }
       
       If the image is unclear, set fields to null.
-      BE STRICT with the Forensic analysis. If it looks like a digital screenshot, trustScore should be below 60.
+      BE FAIR: Do NOT penalize high-quality digital PDFs. They are valid.
     `;
 
         const result = await model.generateContent([prompt, imagePart]);
@@ -93,13 +97,11 @@ export async function analyzeKYC(idCardFile) {
         console.error("Gemini Forensic Error:", error);
 
         // --- FALLBACK MOCK DATA ---
-        // Helpful for testing without burning quota or if API key fails
         return {
             forensics: {
                 trustScore: 88,
                 isPhysicalDocument: true,
-                hasReplayAttackRisk: false,
-                reasoning: "API Unreachable. Returning trusted mock protocol for demonstration."
+                reasoning: "API Unreachable. Returning trusted mock protocol."
             },
             extracted: {
                 fullName: "John Doe (Demo)",
