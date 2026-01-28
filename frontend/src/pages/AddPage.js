@@ -40,49 +40,44 @@ function AddPage() {
 
 
   // --- LOGIC ---
-  // --- KYC AI LOGIC ---
-  const [matchScore, setMatchScore] = useState(null);
-  const [aiAnalysis, setAiAnalysis] = useState(null);
+  // --- LOGIC ---
+  // --- KYC FORENSICS LOGIC ---
+  const [trustScore, setTrustScore] = useState(null);
+  const [forensicData, setForensicData] = useState(null);
 
   const processKYC = async (uploadedFile) => {
     if (!uploadedFile) return;
     setIsScanning(true);
-    setStatus("AI is Analyzing Identity...");
+    setStatus("Running Forensic Analysis...");
 
     try {
-      // If we already have a selfie captured, send it too!
-      const selfie = formData.photoUrl;
+      // Forensics only - no selfie needed for this step
+      const result = await analyzeKYC(uploadedFile);
+      console.log("Forensic Result:", result);
 
-      const result = await analyzeKYC(uploadedFile, selfie);
-      console.log("Gemini Result:", result);
-      setAiAnalysis(result);
+      setForensicData(result.forensics);
+      setTrustScore(result.forensics?.trustScore || 0);
 
-      if (result.matchScore !== null) {
-        setMatchScore(result.matchScore);
-      }
+      // Auto-fill form from extracted data
+      const data = result.extracted || {};
 
-      // Auto-fill form
-      if (result.fullName) updateField('fullName', result.fullName);
-      if (result.dob) updateField('dob', result.dob);
-      if (result.gender) {
-        // Normalize Gender to Title Case (Male/Female) to match Select options
-        const g = result.gender.toUpperCase();
+      if (data.fullName) updateField('fullName', data.fullName);
+      if (data.dob) updateField('dob', data.dob);
+      if (data.gender) {
+        const g = data.gender.toUpperCase();
         if (g.includes("FEMALE")) updateField('gender', "Female");
         else if (g.includes("MALE")) updateField('gender', "Male");
         else updateField('gender', "Other");
       }
-      if (result.phone) updateField('phone', result.phone);
+      if (data.phone) updateField('phone', data.phone);
 
-      if (result.idNumber) {
-        // Try to guess which ID field to fill based on format
-        // Simple heuristic: 12 digits = Aadhaar, 10 alphanum = PAN
-        const cleanId = result.idNumber.replace(/\s/g, '');
+      if (data.idNumber) {
+        const cleanId = data.idNumber.replace(/\s/g, '');
         if (/^\d{12}$/.test(cleanId)) updateField('aadhaar', cleanId);
         else if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(cleanId)) updateField('pan', cleanId);
-        // Fallback: Just put it in Aadhaar for now or add a generic ID field later
-        else updateField('aadhaar', result.idNumber);
+        else updateField('aadhaar', data.idNumber);
       }
-      if (result.address) updateField('physicalAddress', result.address);
+      if (data.address) updateField('physicalAddress', data.address);
 
       setStatus("Analysis Complete!");
 
@@ -370,41 +365,98 @@ function AddPage() {
       <h2 style={styles.title}>KYC Registration Form</h2>
       <p style={styles.subtitle}>Enter Customer details or auto-fill using AI.</p>
 
-      {/* KYC AI Auto-Fill Section */}
-      <div className={isScanning ? "scan-container" : ""} style={{ marginBottom: "30px", padding: "20px", background: "rgba(59, 130, 246, 0.1)", borderRadius: "16px", border: "1px dashed var(--accent-blue)", transition: "all 0.3s" }}>
-        {isScanning && (
-          <>
-            <div className="scan-line"></div>
-            <div className="scan-overlay"></div>
-          </>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', position: "relative", zIndex: 11 }}>
-          <div style={{ fontSize: '24px' }}>{isScanning ? "🤖" : "🛡️"}</div>
-          <div>
-            <h4 style={{ margin: '0 0 5px 0', fontSize: '15px', color: 'white' }}>
-              {isScanning ? `Gemini AI Analysis...` : "AI Identity Verification"}
-            </h4>
-            <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
-              {isScanning ? "Verifying ID authenticity & Extracting PII..." : "Upload Govt ID. Gemini will extract data & match your face."}
-            </p>
+      {/* KYC AI FORENSICS Section */}
+      <div className={isScanning ? "scan-container" : ""} style={{ marginBottom: "30px", padding: "20px", background: "rgba(59, 130, 246, 0.05)", borderRadius: "16px", border: "1px dashed var(--accent-blue)", transition: "all 0.3s" }}>
+
+        {/* Header / Titles */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: "space-between", marginBottom: (trustScore) ? "20px" : "0" }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{ fontSize: '28px' }}>{isScanning ? "🕵️‍♂️" : "🔎"}</div>
+            <div>
+              <h4 style={{ margin: '0 0 5px 0', fontSize: '16px', color: 'white' }}>
+                {isScanning ? `Forensic AI is Analyzing...` : "AI Document Forensics"}
+              </h4>
+              <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
+                {isScanning ? "Checking pixel integrity & extracting data..." : "Detects forgeries, photoshop edits & extracts data."}
+              </p>
+            </div>
           </div>
-          <input
-            type="file"
-            id="kyc-upload"
-            accept="image/*,application/pdf"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              if (e.target.files[0]) processKYC(e.target.files[0]);
-            }}
-          />
-          <button
-            onClick={() => document.getElementById('kyc-upload').click()}
-            style={{ ...styles.btn(true), padding: '8px 16px', fontSize: '13px', opacity: isScanning ? 0.7 : 1 }}
-            disabled={isScanning}
-          >
-            {isScanning ? "Verifying..." : "Auto-Verify ID"}
-          </button>
+
+          {/* Upload Button */}
+          {!isScanning && !trustScore && (
+            <>
+              <input
+                type="file"
+                id="kyc-upload"
+                accept="image/*,application/pdf"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files[0]) processKYC(e.target.files[0]);
+                }}
+              />
+              <button
+                onClick={() => document.getElementById('kyc-upload').click()}
+                style={{ ...styles.btn(true), padding: '10px 20px', fontSize: '13px' }}
+              >
+                Upload & Analyze
+              </button>
+            </>
+          )}
         </div>
+
+        {/* Scanning Animation Overlay */}
+        {isScanning && (
+          <div style={{ marginTop: "20px", height: "4px", background: "#334155", borderRadius: "2px", overflow: "hidden", position: "relative" }}>
+            <div style={{
+              position: "absolute",
+              left: 0, top: 0, bottom: 0,
+              width: `${ocrProgress}%`,
+              background: "var(--accent-blue)",
+              transition: "width 0.2s linear"
+            }} />
+          </div>
+        )}
+
+        {/* TRUST SCORE RESULT */}
+        {trustScore !== null && !isScanning && (
+          <div style={styles.fadeIn}>
+            <div style={{ marginTop: "20px", padding: "15px", background: "#0f172a", borderRadius: "12px", border: trustScore > 85 ? "1px solid #10b981" : "1px solid #ef4444" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <span style={{ fontSize: "12px", textTransform: "uppercase", color: "#94a3b8", fontWeight: "600" }}>Trust Score</span>
+                <span style={{
+                  fontSize: "20px",
+                  fontWeight: "800",
+                  color: trustScore > 85 ? "#10b981" : "#ef4444"
+                }}>
+                  {trustScore}% {trustScore > 85 ? "AUTHENTIC" : "SUSPICIOUS"}
+                </span>
+              </div>
+
+              <div style={{ width: "100%", height: "8px", background: "#334155", borderRadius: "4px", overflow: "hidden", marginBottom: "12px" }}>
+                <div style={{
+                  width: `${trustScore}%`,
+                  height: "100%",
+                  background: trustScore > 85 ? "#10b981" : "#ef4444",
+                  transition: "width 1s ease-out"
+                }} />
+              </div>
+
+              <div style={{ fontSize: "13px", color: "#cbd5e1", lineHeight: "1.5" }}>
+                {forensicData?.reasoning}
+              </div>
+            </div>
+
+            <div style={{ textAlign: "right", marginTop: "10px" }}>
+              <button
+                onClick={() => { setTrustScore(null); setForensicData(null); }}
+                style={{ ...styles.btn(false), fontSize: "12px", padding: "5px 10px" }}
+              >
+                Analyze Another
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
 
