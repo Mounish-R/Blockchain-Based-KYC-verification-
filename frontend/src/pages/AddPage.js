@@ -3,6 +3,8 @@ import { analyzeKYC } from "../utils/geminiAI";
 import { ethers } from "ethers";
 import DocVerify from "../contracts/DocVerify.json";
 import { QRCodeCanvas } from "qrcode.react";
+import { auth } from "../firebase/config";
+import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 
 const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 const hardhatChainId = "0x7A69";
@@ -12,6 +14,12 @@ function AddPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Disable app verification for testing (Bypasses ReCAPTCHA)
+  React.useEffect(() => {
+    // This allows using test phone numbers without ReCAPTCHA
+    auth.settings.appVerificationDisabledForTesting = true;
+  }, []);
 
   // Form Data
   const [formData, setFormData] = useState({
@@ -32,6 +40,13 @@ function AddPage() {
   const [fileHash, setFileHash] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
+
+  // OTP Verification State
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [otpLoading, setOtpLoading] = useState(false);
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -70,6 +85,7 @@ function AddPage() {
         else updateField('gender', "Other");
       }
       if (data.phone) updateField('phone', data.phone);
+      console.log('📱 Phone extracted:', data.phone);
 
       if (data.idNumber) {
         const cleanId = data.idNumber.replace(/\s/g, '');
@@ -110,6 +126,76 @@ function AddPage() {
     }
     return () => clearInterval(interval);
   }, [isScanning]);
+
+  // --- OTP FUNCTIONS ---
+  // --- OTP FUNCTIONS ---
+  const sendOTP = async () => {
+    if (!formData.phone) {
+      alert('Phone number required');
+      return;
+    }
+
+    // Format phone number (must include country code)
+    let phoneNumber = formData.phone.trim();
+    if (!phoneNumber.startsWith('+')) {
+      phoneNumber = '+91' + phoneNumber; // Add +91 for India
+    }
+
+    setOtpLoading(true);
+    setStatus('Sending OTP...');
+
+    try {
+      // Even in testing mode, we need a valid verifier instance
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch (e) { }
+        window.recaptchaVerifier = null;
+      }
+
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => { }
+      });
+
+      const confirmation = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
+
+      setConfirmationResult(confirmation);
+      setOtpSent(true);
+      setStatus('OTP sent to ' + phoneNumber);
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+
+      if (error.code === 'auth/billing-not-enabled') {
+        alert('⚠️ Add this as TEST number in Firebase Console:\n\nAuthentication → Phone → Test numbers\nNumber: ' + phoneNumber + '\nCode: 123456');
+      } else {
+        alert('Failed to send OTP: ' + error.message);
+      }
+
+      // No reCAPTCHA cleanup needed anymore
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const verifyOTP = async () => {
+    if (!confirmationResult) {
+      alert('Please request OTP first');
+      return;
+    }
+
+    setOtpLoading(true);
+    setStatus('Verifying OTP...');
+
+    try {
+      await confirmationResult.confirm(otpInput);
+      setOtpVerified(true);
+      setStatus('Phone verified successfully! ✓');
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      alert('Invalid OTP. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
 
   const getFileHash = async (file) => {
@@ -459,6 +545,124 @@ function AddPage() {
 
       </div>
 
+      {/* Invisible reCAPTCHA Container (Required by SDK) */}
+      <div id="recaptcha-container" style={{ position: 'fixed', bottom: 0, right: 0, opacity: 0, pointerEvents: 'none' }}></div>
+
+      {/* OTP Verification Section */}
+      {formData.phone && !otpVerified && (
+        <div style={{
+          marginTop: '25px',
+          marginBottom: '40px',
+          padding: '24px',
+          background: 'rgba(15, 23, 42, 0.6)',
+          borderRadius: '16px',
+          border: '1px solid rgba(16, 185, 129, 0.2)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px',
+          backdropFilter: 'blur(10px)'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <h4 style={{ margin: '0 0 8px 0', color: '#10b981', fontSize: '18px', fontWeight: '700' }}>
+              Verify Phone Number
+            </h4>
+            <p style={{ margin: '0', fontSize: '14px', color: '#94a3b8' }}>
+              Sending OTP to <span style={{ color: '#fff', fontWeight: '600' }}>{formData.phone}</span>
+            </p>
+          </div>
+
+          {!otpSent ? (
+            <button
+              onClick={sendOTP}
+              disabled={otpLoading}
+              style={{
+                ...styles.btn(true),
+                width: '100%',
+                maxWidth: '200px',
+                opacity: otpLoading ? 0.6 : 1,
+                cursor: otpLoading ? 'not-allowed' : 'pointer',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+              }}
+            >
+              {otpLoading ? 'Sending Code...' : 'Send OTP Code'}
+            </button>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', width: '100%' }}>
+              <input
+                type="text"
+                placeholder="000000"
+                value={otpInput}
+                onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                maxLength={6}
+                style={{
+                  ...styles.input,
+                  width: '200px',
+                  textAlign: 'center',
+                  fontSize: '24px',
+                  letterSpacing: '8px',
+                  fontWeight: '700',
+                  padding: '12px',
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  border: '2px solid rgba(16, 185, 129, 0.5)',
+                  boxShadow: '0 0 15px rgba(16, 185, 129, 0.1)'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
+                <button
+                  onClick={verifyOTP}
+                  disabled={otpLoading || otpInput.length !== 6}
+                  style={{
+                    ...styles.btn(true),
+                    flex: 1,
+                    maxWidth: '140px',
+                    opacity: (otpLoading || otpInput.length !== 6) ? 0.6 : 1,
+                    background: '#10b981'
+                  }}
+                >
+                  {otpLoading ? 'Verifying...' : 'Verify'}
+                </button>
+                <button
+                  onClick={() => {
+                    setOtpSent(false);
+                    setOtpInput('');
+                    sendOTP();
+                  }}
+                  disabled={otpLoading}
+                  style={{
+                    ...styles.btn(false),
+                    flex: 1,
+                    maxWidth: '140px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                  }}
+                >
+                  Resend
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Success Message */}
+      {otpVerified && (
+        <div style={{
+          marginTop: '15px',
+          marginBottom: '30px',
+          padding: '15px',
+          background: 'rgba(16, 185, 129, 0.1)',
+          borderRadius: '8px',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          color: '#10b981',
+          textAlign: 'center',
+          fontSize: '14px',
+          fontWeight: '600'
+        }}>
+          ✓ Phone number verified successfully!
+        </div>
+      )}
+
 
       <div style={styles.grid}>
         <div style={styles.inputGroup}>
@@ -494,12 +698,20 @@ function AddPage() {
           </select>
         </div>
         <div style={styles.inputGroup}>
-          <label style={styles.label}>Phone Number *</label>
+          <label style={styles.label}>Phone Number * {trustScore && "🔒 (Verified by AI)"}</label>
           <input
-            style={styles.input}
+            style={{
+              ...styles.input,
+              background: trustScore ? 'rgba(15, 23, 42, 0.4)' : styles.input.background,
+              cursor: trustScore ? 'not-allowed' : 'text',
+              border: trustScore ? '1px solid rgba(148, 163, 184, 0.2)' : styles.input.border,
+              color: trustScore ? '#94a3b8' : 'white'
+            }}
             value={formData.phone}
             onChange={e => updateField('phone', e.target.value)}
             placeholder="+91 ..."
+            readOnly={!!trustScore}
+            disabled={!!trustScore}
           />
         </div>
         <div style={styles.inputGroup}>
@@ -809,6 +1021,7 @@ function AddPage() {
                   if (!formData.dob) return alert("Please select Date of Birth");
                   if (!formData.phone) return alert("Please enter Phone Number");
                   if (!formData.aadhaar) return alert("Please enter Aadhaar Number");
+                  if (!otpVerified) return alert("Please verify your phone number with OTP");
                 }
                 if (step === 2) {
                   if (!formData.pan) return alert("Permanent Account Number (PAN) is mandatory");
