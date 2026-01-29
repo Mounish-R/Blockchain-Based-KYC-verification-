@@ -1,7 +1,9 @@
 const https = require('https');
 
 // The Key currently in use
-const API_KEY = "AIzaSyAX6Oqgf6t60oLZUSOZebVAn4pKH7kgkH8";
+// const API_KEY = "AIzaSyAX6Oqgf6t60oLZUSOZebVAn4pKH7kgkH8";
+// const API_KEY = "AIzaSyDdodaVMWe70hifpE7fw_aZ9Z-Yov2-ovg";
+const API_KEY = "AIzaSyADp1gEMTOmCRQj6k1_BHDqEm-QEAuBxvo";
 
 const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
 
