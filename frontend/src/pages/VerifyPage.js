@@ -114,86 +114,138 @@ export default function VerifyPage() {
   // --- PDF GENERATION ---
   const generateSmartCardPDF = () => {
     try {
-      // ID-1 Card Size: 85.60 × 53.98 mm
+      // Larger Card Size: 140 × 88 mm (approximately credit card size scaled up)
       const doc = new jsPDF({
         orientation: "landscape",
         unit: "mm",
-        format: [85.6, 54]
+        format: [140, 88]
       });
 
       // 1. Card Background (Dark Gradient Simulation)
-      // jsPDF doesn't support gradients easily, so we use a solid dark color
-      doc.setFillColor(15, 23, 42); // #0f172a (Dark Slate)
-      doc.rect(0, 0, 85.6, 54, "F");
+      doc.setFillColor(10, 14, 26); // #0a0e1a (Darker background)
+      doc.rect(0, 0, 140, 88, "F");
 
       // 2. Decorative Header Bar
-      doc.setFillColor(33, 41, 60); // Lighter slate
-      doc.rect(0, 0, 85.6, 12, "F");
+      doc.setFillColor(26, 31, 58); // #1a1f3a
+      doc.rect(0, 0, 140, 18, "F");
 
       // 3. Header Text
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
+      doc.setFontSize(11);
       doc.setTextColor(148, 163, 184); // #94a3b8
-      doc.text("KYC VERIFIED STATUS", 4, 8);
+      doc.text("KYC VERIFIED STATUS", 8, 11);
 
       // Verified Badge (Green Rect + Text)
       doc.setFillColor(16, 185, 129); // #10b981
-      doc.roundedRect(58, 4, 24, 5, 1, 1, "F");
+      doc.roundedRect(100, 6, 35, 8, 2, 2, "F");
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(5);
-      doc.text("KYC CONFIRMED", 70, 7.5, { align: "center" });
-
-      // 4. Content Content
-      doc.setTextColor(255, 255, 255);
-
-      // Name
-      doc.setFontSize(5);
-      doc.setTextColor(148, 163, 184);
-      doc.text("NAME", 26, 20);
-
-      doc.setFontSize(12);
-      doc.setTextColor(255, 255, 255);
-      doc.text(student.fullName, 26, 25);
-
-      // DOB & Gender Row
-      doc.setFontSize(5);
-      doc.setTextColor(148, 163, 184);
-      doc.text("DOB", 26, 32);
-      doc.text("GENDER", 55, 32);
-
       doc.setFontSize(7);
-      doc.setTextColor(226, 232, 240);
-      doc.text(student.dob, 26, 36);
-      doc.text(student.gender, 55, 36);
+      doc.text("KYC CONFIRMED", 117.5, 11.5, { align: "center" });
 
-      // Hash (Tiny monospace)
-      doc.setFontSize(4);
-      doc.setTextColor(100, 116, 139);
-      doc.text("DOCUMENT HASH", 26, 44);
-      doc.setFont("courier", "normal");
-      doc.text(student.hash, 26, 47, { maxWidth: 55 });
+      // 4. Main Content Area
+      doc.setTextColor(255, 255, 255);
 
-      // 5. Photo or QR
+      // Photo or QR (Larger)
       if (student.photoUrl) {
-        doc.addImage(student.photoUrl, "JPEG", 3, 16, 20, 20);
-        // Add a thin border around photo in PDF
+        doc.addImage(student.photoUrl, "JPEG", 8, 26, 28, 28);
+        // Add a border around photo
         doc.setDrawColor(255, 255, 255);
-        doc.setLineWidth(0.2);
-        doc.rect(3, 16, 20, 20);
+        doc.setLineWidth(0.3);
+        doc.rect(8, 26, 28, 28);
       } else {
         const qrCanvas = document.getElementById("pdf-qr-source");
         if (qrCanvas) {
           const qrData = qrCanvas.toDataURL("image/png");
-          // Place QR on the left
-          doc.addImage(qrData, "PNG", 3, 16, 20, 20);
+          doc.addImage(qrData, "PNG", 8, 26, 28, 28);
         }
       }
 
-      // 6. Footer Strip
+      // Name Section
+      doc.setFontSize(7);
+      doc.setTextColor(148, 163, 184);
+      doc.text("FULL NAME", 42, 28);
+
+      doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(4);
+      doc.setTextColor(255, 255, 255);
+      doc.text(student.fullName, 42, 36);
+
+      // DOB & Gender Row
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(148, 163, 184);
+      doc.text("DATE OF BIRTH", 42, 44);
+      doc.text("GENDER", 85, 44);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(226, 232, 240);
+      doc.text(student.dob, 42, 50);
+      doc.text(student.gender, 85, 50);
+
+      // Official Stamp Seal (Right side)
+      const sealX = 118;
+      const sealY = 47;
+      const sealRadius = 14;
+
+      // Outer double border
+      doc.setDrawColor(220, 38, 38);
+      doc.setLineWidth(1);
+      doc.circle(sealX, sealY, sealRadius, "S");
+      doc.setLineWidth(0.5);
+      doc.circle(sealX, sealY, sealRadius - 1, "S");
+
+      // Inner circle
+      doc.setLineWidth(0.5);
+      doc.circle(sealX, sealY, sealRadius - 4, "S");
+
+      // Center content
+      doc.setTextColor(220, 38, 38);
+
+      // "Official" text
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "bold");
+      doc.text("OFFICIAL", sealX, sealY - 4, { align: "center" });
+
+      // Seal icon replacement
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("B", sealX, sealY + 2, { align: "center" });
+
+      // "Blockchain Verified" text
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "bold");
+      doc.text("BLOCKCHAIN", sealX, sealY + 7, { align: "center" });
+      doc.text("VERIFIED", sealX, sealY + 11, { align: "center" });
+
+      // Additional Info (Phone/Email if available)
+      if (student.phone) {
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(148, 163, 184);
+        doc.text("PHONE", 42, 58);
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(226, 232, 240);
+        doc.text(student.phone, 42, 63);
+      }
+
+      // Hash Section (Bottom)
+      doc.setFontSize(6);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      doc.text("DOCUMENT HASH", 8, 68);
+
+      doc.setFont("courier", "normal");
+      doc.setFontSize(6);
+      doc.text(student.hash, 8, 72, { maxWidth: 124 });
+
+      // Footer Strip
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6);
       doc.setTextColor(71, 85, 105);
-      doc.text("IMMUTABLE • SECURE • DECENTRALIZED", 42.8, 52, { align: "center" });
+      doc.text("BLOCKCHAIN SECURED • IMMUTABLE • DECENTRALIZED", 70, 82, { align: "center" });
 
       doc.save(`SmartID-${student.fullName}.pdf`);
     } catch (e) {
@@ -218,17 +270,27 @@ export default function VerifyPage() {
       width: "100%",
       maxWidth: "600px",
       height: "300px",
-      border: isDragOver ? "3px dashed var(--success)" : "2px dashed #334155",
+      border: isDragOver ? "3px dashed var(--success)" : scanning ? "3px dashed var(--accent-blue)" : "2px dashed #334155",
       borderRadius: "20px",
-      background: isDragOver ? "rgba(16,185,129,0.1)" : "var(--bg-card)",
+      background: isDragOver
+        ? "rgba(16,185,129,0.1)"
+        : scanning
+          ? "rgba(59, 130, 246, 0.05)"
+          : "var(--bg-card)",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      transition: "all 0.3s",
+      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       position: "relative",
       overflow: "hidden",
       cursor: "pointer",
+      boxShadow: isDragOver
+        ? "0 0 30px rgba(16, 185, 129, 0.3)"
+        : scanning
+          ? "0 0 30px rgba(59, 130, 246, 0.2)"
+          : "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+      animation: scanning ? "pulseGlow 2s infinite" : "none",
     },
     scanLine: {
       position: "absolute",
@@ -236,7 +298,7 @@ export default function VerifyPage() {
       left: 0,
       width: "100%",
       height: "4px",
-      background: "var(--success)",
+      background: "linear-gradient(90deg, transparent, var(--success), transparent)",
       boxShadow: "0 0 15px var(--success)",
       animation: "scan 1.5s infinite linear",
       display: scanning ? "block" : "none",
@@ -245,10 +307,17 @@ export default function VerifyPage() {
       fontSize: "60px",
       marginBottom: "20px",
       opacity: 0.8,
+      animation: isDragOver ? "float 2s ease-in-out infinite" : "none",
     },
     text: {
       fontSize: "18px",
       color: "#94a3b8",
+      fontWeight: "500",
+    },
+    subtext: {
+      fontSize: "14px",
+      color: "#64748b",
+      marginTop: "10px",
     },
     advancedToggle: {
       marginTop: "30px",
@@ -256,35 +325,45 @@ export default function VerifyPage() {
       cursor: "pointer",
       fontSize: "14px",
       textDecoration: "underline",
+      transition: "color 0.2s",
     },
     advancedPanel: {
       marginTop: "20px",
       background: "var(--bg-card)",
       padding: "20px",
-      borderRadius: "10px",
+      borderRadius: "16px",
       width: "100%",
       maxWidth: "600px",
+      border: "1px solid #334155",
+      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
     },
     input: {
       width: "95%",
-      padding: "10px",
-      borderRadius: "6px",
+      padding: "12px",
+      borderRadius: "8px",
       border: "1px solid #334155",
       background: "var(--bg-dark)",
       color: "var(--text-primary)",
       marginBottom: "10px",
+      fontSize: "14px",
+      fontFamily: "'JetBrains Mono', monospace",
+      transition: "border-color 0.2s",
     },
     btn: {
-      padding: "10px 20px",
-      background: "var(--accent-blue)",
+      padding: "12px 24px",
+      background: "linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-hover) 100%)",
       color: "white",
       border: "none",
-      borderRadius: "6px",
+      borderRadius: "8px",
       cursor: "pointer",
+      fontWeight: "600",
+      fontSize: "14px",
+      transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
     },
     resultContainer: {
       marginTop: "40px",
-      animation: "fadeIn 1s ease",
+      animation: "fadeInUp 0.8s ease",
     }
   };
 
@@ -319,7 +398,7 @@ export default function VerifyPage() {
             <div style={{ textAlign: "center" }}>
               <div style={styles.icon}>📄</div>
               <div style={styles.text}>Drag & Drop ID Card Here</div>
-              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "10px" }}>(or click to browse)</div>
+              <div style={styles.subtext}>(or click to browse)</div>
             </div>
           )}
 
